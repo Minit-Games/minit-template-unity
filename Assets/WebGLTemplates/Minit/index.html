@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: #8fd3f4;
+        /* Without these, a fast drag is a back-navigation swipe on iOS and a
+           double-tap is a zoom -- both of which eat taps. */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #unity-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+        background: #8fd3f4;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <script>
+/* =======================================================================
+   AUDIO IN THE MINIT APP -- the reason this shell exists.
+
+   Everything below must run BEFORE the Unity loader, so the patches are in
+   place before Unity creates its audio graph. Three independent problems, all
+   of which end in the same symptom: a game that is audible in a browser and
+   completely silent in the app, with nothing in the game able to tell.
+   ======================================================================= */
+
+/* --- 0. Repair the host's volume channel (DROP-8164) -------------------
+   The app tells a game its volume with
+       window.postMessage(payload, window.location.origin)
+   and on iOS the game is served from the minitlocal:// custom scheme, whose
+   origin is OPAQUE -- so location.origin is the string "null", and postMessage
+   does not fail soft with that value, it THROWS. Every volume message the app
+   sends is therefore discarded: the seed baked into the injection at mount time
+   is the only value the page ever sees, and for a drop mounted before it was
+   focused that seed is 0. The game is then healthy and permanently inaudible.
+   Only a foreground transition fixes it, because __minitResumeAudio is a direct
+   call rather than a postMessage -- which is exactly the reported symptom.
+
+   Rather than guess what volume the host wanted, make its own message arrive:
+   retry with '*' when a same-window post is rejected for its target origin. The
+   host's real intent then flows through untouched, including a deliberate mute.
+   Harmless everywhere else -- on a normal origin the first call simply
+   succeeds. */
+(function () {
+	if (typeof window.postMessage !== 'function') { return; }
+	var native = window.postMessage.bind(window);
+	window.postMessage = function (message, targetOrigin, transfer) {
+		try {
+			return native(message, targetOrigin, transfer);
+		} catch (err) {
+			// Only the target-origin rejection is retried; anything else (an
+			// unclonable payload, say) is a real error and must propagate.
+			if (!err || err.name !== 'SyntaxError' || targetOrigin === '*') { throw err; }
+			console.log('[minit-audio] postMessage origin ' + String(targetOrigin) +
+				' rejected; retrying same-window with "*"');
+			return native(message, '*', transfer);
+		}
+	};
+}());/* --- 1. AudioWorklet over the app's custom URL scheme ------------------
+   Inside the Minit app the game is served from minitlocal://, a custom scheme
+   that an AudioWorklet module fetch cannot reach: addModule() rejects and any
+   driver relying on it never connects its output node, leaving the game silent
+   with only a console error. Godot demonstrably hits this; whether a given
+   Unity version routes audio through a worklet depends on the version, so this
+   is carried as cheap insurance -- it is inert when addModule already works.
+   The retry fetches the module with the page's own fetch(), which the app's
+   scheme handler does serve, and hands the worklet a blob: URL. */
+(function () {
+	if (typeof AudioWorklet === 'undefined' || !AudioWorklet.prototype.addModule) { return; }
+	var addModule = AudioWorklet.prototype.addModule;
+	AudioWorklet.prototype.addModule = function (url, options) {
+		var worklet = this;
+		return addModule.call(worklet, url, options).catch(function (err) {
+			// A blob: that failed has no second route left -- keep rejecting so
+			// a genuinely broken module does not loop.
+			if (String(url).indexOf('blob:') === 0) { return Promise.reject(err); }
+			return fetch(url).then(function (r) { return r.text(); }).then(function (source) {
+				var blobUrl = URL.createObjectURL(new Blob([source], { type: 'application/javascript' }));
+				return addModule.call(worklet, blobUrl, options);
+			});
+		});
+	};
+}());
+
+/* --- 2 & 3. A suspended context, and the host's mute gain --------------
+   The app routes every game through an AudioContext subclass whose
+   `destination` is a mute gain it owns, seeded at 0 and faded up to
+   window.dropAudioVolume. Two things go wrong:
+
+     * the context can be left suspended, and audio produced while it is
+       suspended is simply dropped; and
+     * if the host's fade-up never lands, the game is entirely healthy --
+       context running, engine mixing, buffers queued -- and inaudible.
+
+   Only a foreground transition re-applies that gain, which is why
+   backgrounding the app and returning "fixes" it. Both are repaired here.
+
+   Unity exposes no handle on its AudioContext, so the constructor is wrapped
+   to keep a registry at window.__minitAudioContexts. In the app this wraps the
+   host's own subclass, so the instances recorded carry _muteGain and
+   fadeVolume. MinitAudioBridge.jslib reads that same registry, which is how the
+   game knows not to start its music into a suspended context. */
+(function () {
+	var contexts = [];
+	window.__minitAudioContexts = contexts;
+
+	/* Did the host ever state a volume AT ALL? The distinction matters, because
+	   a mute and a silence nobody asked for look identical from in here: both
+	   are a mute gain sitting at 0.
+
+	   The app seeds that gain at 0 and states the real volume once, when the
+	   document loads. A fast engine has its AudioContext up by then and takes
+	   the value. A slow one -- a large Unity build is tens of seconds of wasm
+	   -- does not exist yet, and nothing restates it afterwards, so the
+	   context is later born into a 0 that was never actually about this drop.
+	   The next foreground transition does restate it, which is precisely the
+	   "no sound until I background the app and come back" symptom.
+
+	   So: an explicit 0 from the host is a real mute and is left alone. A 0 we
+	   were merely never spoken to about is repaired -- and only after a real
+	   gesture, so the player has demonstrably asked for the game. */
+	var hostSpoke = false, gestured = false;
+	window.addEventListener('message', function (e) {
+		var d = e && e.data;
+		if (d && typeof d === 'object' && /^minit\.(fade|set)DropAudioVolume$/.test(d.type)) {
+			hostSpoke = true;
+			console.log('[minit-audio] host set volume ' + d.value +
+				' at ' + Math.round(performance.now()) + 'ms');
+		}
+	}, true);
+
+	var Native = window.AudioContext || window.webkitAudioContext;
+	if (Native) {
+		var wrap = function () {
+			var ctx = new Native(...arguments);
+			contexts.push(ctx);
+			return ctx;
+		};
+		window.AudioContext = wrap;
+		window.webkitAudioContext = wrap;
+	}
+
+	var last = '';
+	function report(why) {
+		try {
+			var c = contexts[0];
+			if (!c) { return; }
+			var gain = c._muteGain && c._muteGain.gain ? c._muteGain.gain.value : null;
+			var line = c.state + '|' + (gain === null ? 'nogain' : gain.toFixed(2))
+				+ '|' + (window.dropAudioVolume === undefined ? 'novol' : window.dropAudioVolume)
+				+ '|host=' + (hostSpoke ? 'spoke' : 'silent')
+				+ '|gestured=' + (gestured ? 'yes' : 'no');
+			if (line === last) { return; }
+			last = line;
+			console.log('[minit-audio] ' + line + ' (' + why + ') contexts=' + contexts.length);
+		} catch (e) { }
+	}
+
+	/* Re-applies the HOST'S OWN target, through the host's own fadeVolume, and
+	   only when the host says it wants us audible while the gain is still zero
+	   -- and only once that has been true for a moment, since the host
+	   legitimately holds it at 0 for a prime window and a short ramp. When the
+	   app has deliberately muted or ducked the drop it sets that value to 0 or
+	   a ducked level, so this does nothing and a muted drop stays muted. */
+	var stuckSince = 0;
+	function repairGain(why) {
+		// Every registered context, not just the first. One is the normal case,
+		// but an engine that creates its own leaves the game's on a later index
+		// with the repair watching the wrong one -- healthy game, correct
+		// logic, wrong target, and only the app's foreground path recovers it.
+		for (var ci = 0; ci < contexts.length; ci++) { repairOne(contexts[ci], why); }
+	}
+
+	function repairOne(c, why) {
+		try {
+			if (!c || !c._muteGain || !c._muteGain.gain) { stuckSince = 0; return; }
+			var target = window.dropAudioVolume;
+			if (typeof target !== 'number') { stuckSince = 0; return; }
+			if (target <= 0) {
+				// Host said 0: a deliberate mute, honoured. Host said nothing:
+				// nothing to honour, so bring the drop up to full once running.
+				if (hostSpoke || !gestured || c.state !== 'running') { stuckSince = 0; return; }
+				target = 1;
+			}
+			if (c._muteGain.gain.value > 0.001) { stuckSince = 0; return; }
+			var now = Date.now();
+			if (!stuckSince) { stuckSince = now; return; }
+			if (now - stuckSince < 1500) { return; }
+			stuckSince = now;
+			if (typeof c.fadeVolume === 'function') {
+				c.fadeVolume(target, 0.3);
+				console.log('[minit-audio] ' + (hostSpoke ? 're-applied host volume ' :
+					'host never set a volume; restoring ') + target + ' (' + why + ')');
+			}
+		} catch (e) { }
+	}
+
+	function resume(why) {
+		for (var i = 0; i < contexts.length; i++) {
+			try {
+				var c = contexts[i];
+				if (c && c.state !== 'running' && typeof c.resume === 'function') { c.resume(); }
+			} catch (e) { }
+		}
+		repairGain(why);
+		report(why);
+	}
+
+	['touchstart', 'touchend', 'pointerdown', 'mousedown', 'click'].forEach(function (evt) {
+		// Capture phase, so this runs even if something else stops propagation
+		// before the canvas sees the gesture.
+		document.addEventListener(evt, function () { gestured = true; resume(evt); }, { capture: true, passive: true });
+	});
+	document.addEventListener('visibilitychange', function () { if (!document.hidden) { resume('visible'); } });
+	window.addEventListener('focus', function () { resume('focus'); });
+	window.addEventListener('pageshow', function () { resume('pageshow'); });
+
+	// Backing-off watchdog: often early on, rarely later.
+	var tries = 0;
+	(function tick() {
+		tries++;
+		resume('watchdog');
+		setTimeout(tick, tries < 20 ? 500 : (tries < 40 ? 2000 : 10000));
+	})();
+}());
+    </script>
+    <script>
+      const buildUrl = "Build";
+      const loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      const config = {
+        arguments: [],
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+#endif
+#if USE_WASM
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+      };
+
+      const canvas = document.querySelector("#unity-canvas");
+      const script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onerror = function () { console.error("[Minit] Failed to load Unity loader:", loaderUrl); };
+      script.onload = () => {
+        createUnityInstance(canvas, config, (_progress) => {
+          // No loading UI — the Minit platform hides the boot behind the feed reveal.
+          // The game signals readiness via Minit.LoadingDone() / MinitReady component.
+        }).catch((message) => {
+          console.error("[Minit] createUnityInstance failed:", message);
+        });
+      };
+
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

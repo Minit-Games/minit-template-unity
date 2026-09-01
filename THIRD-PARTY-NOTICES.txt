@@ -1,0 +1,45 @@
+Unity Minit Template — third party notices
+===========================================
+
+All artwork and all sound effects are generated from source at build time
+(tools/gen-art.mjs and tools/gen-audio.mjs). The only third-party media is the
+background music track below.
+
+
+Background music
+----------------
+"Title Screen" from "5 Chiptunes (Action)" by Juhani Junkala (SubspaceAudio).
+https://opengameart.org/content/5-chiptunes-action
+
+Released under CC0 1.0 Universal (public domain dedication). From the author's
+INFO.txt shipped with the pack: "These music tracks have been released under
+CC0 creative commons license. You can do anything you want with these tunes."
+
+CC0 requires no attribution; the credit here and in meta.json is given anyway.
+
+The bundled file is a derivative: downmixed to mono and resampled to 16 kHz
+(tools/gen-music.mjs). The original is 44.1 kHz stereo.
+
+
+Titan One
+---------
+Copyright (c) 2011, Rodrigo Fuenzalida, with Reserved Font Name Titan.
+
+Licensed under the SIL Open Font License, Version 1.1. Full text in this
+repository at assets/fonts/TitanOne-OFL.txt, and at https://scripts.sil.org/OFL
+
+Bundled in compiled form only: Defold rasterises it into a distance-field glyph
+atlas at build time, so no .ttf is redistributed.
+
+
+Unity
+-----
+Made with Unity. The WebGL runtime shipped in the build is Unity Technologies'
+and is covered by the Unity Terms of Service and the licence of the account it
+was built with. See https://unity.com/legal
+
+
+Minit Games Unity SDK
+---------------------
+games.minit.unity, resolved as a UPM package from Minit-Games/minit-unity.
+https://github.com/Minit-Games/minit-unity (private)
