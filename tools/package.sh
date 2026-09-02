@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 UNITY="${UNITY:-/Applications/Unity/Hub/Editor/6000.5.10f1/Unity.app/Contents/MacOS/Unity}"
 OUT="Build/MinitWebGL"
-ZIP="Build/unity-minit-template.zip"
+ZIP="Build/minit-template-unity.zip"
 LOG="Build/build.log"
 
 if [ ! -x "$UNITY" ]; then
@@ -44,6 +44,17 @@ rm -f Build/*_minit.zip
 # index.html.
 cp meta.json "$OUT/meta.json"
 cp THIRD-PARTY-NOTICES.txt "$OUT/THIRD-PARTY-NOTICES.txt"
+
+echo "==> audio"
+# A build that is silent inside the Minit app looks completely healthy from
+# every other angle -- context running, engine mixing, buffers queued -- so this
+# measures the audio graph rather than trusting any engine flag. It runs the
+# built output behind a test double for the app's audio injection, with autoplay
+# disabled so the context starts suspended exactly as it does in a WKWebView.
+#
+# It is in the packaging path deliberately: a silent build cannot be shipped.
+# This template shipped that exact bug to a device before the check existed.
+node tools/verify-audio.mjs "$OUT"
 
 echo "==> packaging"
 rm -f "$ZIP"

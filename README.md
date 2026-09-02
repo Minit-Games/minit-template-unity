@@ -7,7 +7,7 @@ around it are easy to read. Tap the ball to bounce it; each tap scores. A
 30 second clock ends the run and reports the result.
 
 Start here, replace the game, keep the plumbing. There are matching
-`defold-minit` and `godot-minit` templates with the same game.
+`minit-template-defold` and `minit-template-godot` templates with the same game.
 
 ```bash
 tools/package.sh                # regenerate assets, build, verify, zip for upload
