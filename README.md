@@ -19,6 +19,64 @@ required Player setting itself. `tools/package.sh` calls the same entry point
 headlessly and then adds `meta.json` and the notices to the archive, which that
 menu item does not.
 
+## Tools and configuration
+
+Everything in `tools/` needs **Node 22 or newer** and a Chromium-based browser.
+There is nothing else to install — the scripts use only Node built-ins.
+
+**The browser.** The audio gate drives a real browser over the DevTools
+protocol, so it needs one present. It takes the first that exists on disk, which
+on most machines means there is nothing to configure:
+
+| OS | Tried, in order |
+|---|---|
+| macOS | Google Chrome, Microsoft Edge, Chromium |
+| Windows | Google Chrome, Microsoft Edge *(Edge ships with Windows)* |
+| Linux | `google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser`, `microsoft-edge` |
+
+Set `CHROME` to override it with any Chromium build. On macOS and Linux:
+
+```bash
+CHROME="/path/to/chrome" tools/package.sh
+```
+
+and on Windows, from Git Bash (these scripts need bash — see below):
+
+```bash
+CHROME="C:/path/to/msedge.exe" tools/package.sh
+```
+
+If none is found the run stops immediately and lists every path it tried.
+Opera is deliberately *not* tried: it is Chromium, but several builds refuse
+remote debugging and then fail exactly like a missing browser.
+
+### On Windows
+
+The shell scripts need bash, so run `tools/build.sh` and `tools/package.sh`
+under Git Bash or WSL. Every Node script they call runs natively in `cmd` or
+PowerShell:
+
+```
+node tools/check-meta.mjs
+node tools/verify-audio.mjs <built-dir>
+```
+
+Calling `node` directly also sidesteps PowerShell's execution policy, which
+blocks npm's own `npm.ps1` shim with *"running scripts is disabled on this
+system"* — a Windows setting you should not have to weaken.
+
+### Engine location
+
+`tools/package.sh` drives the Unity editor headlessly:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `UNITY` | `/Applications/Unity/Hub/Editor/6000.5.10f1/Unity.app/Contents/MacOS/Unity` | The Unity executable |
+
+It fails immediately, naming the path, if that is not executable.
+
+**`tools/*.sh` still need bash**, so on Windows run them under Git Bash or WSL.
+The Node scripts they call run natively anywhere.
 ## Cloning
 
 **The SDK is a private UPM package.** `Packages/manifest.json` points at

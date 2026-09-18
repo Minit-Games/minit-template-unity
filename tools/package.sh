@@ -95,7 +95,7 @@ if ! grep -qE '\.br$' <<<"$listing"; then
   echo "note: no Brotli files - check compressionFormat is still Brotli." >&2
 fi
 
-size_bytes=$(stat -f%z "$ZIP")
+size_bytes=$(wc -c < "$ZIP" | tr -d " ")
 if [ "$size_bytes" -gt 52428800 ]; then
   echo "ZIP is $(( size_bytes / 1048576 )) MB - over Minit's 50 MB hard limit." >&2; fail=1
 elif [ "$size_bytes" -gt 5242880 ]; then
