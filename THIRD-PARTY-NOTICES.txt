@@ -2,8 +2,8 @@ Unity Minit Template — third party notices
 ===========================================
 
 All artwork and all sound effects are generated from source at build time
-(tools/gen-art.mjs and tools/gen-audio.mjs). The only third-party media is the
-background music track below.
+(tools/gen-art.mjs and tools/gen-audio.mjs). The only third-party media are the
+background music track and the Titan One font below.
 
 
 Background music

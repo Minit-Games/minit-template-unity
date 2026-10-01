@@ -173,8 +173,10 @@ sprite from signed distance fields and `tools/gen-audio.mjs` synthesises the
 effects, both into `Assets/Resources/` where the game loads them by name.
 Replace either wholesale when you bring your own.
 
-The background music is the one third-party asset: a CC0 chiptune, converted by
-`tools/gen-music.mjs` from 2.0 MB of 44.1 kHz stereo to 0.35 MB of 16 kHz mono.
+There are two third-party assets. The Titan One font (SIL OFL 1.1) ships
+unmodified in `Assets/Resources/Fonts/`. The background music is a CC0
+chiptune, converted by `tools/gen-music.mjs` from 2.0 MB of 44.1 kHz stereo to
+0.35 MB of 16 kHz mono.
 Unity loops it natively via `AudioSource.loop`. That script also checks whether
 the loop point is genuinely seamless before "fixing" it; this track's is, so it
 is left exactly as the author wrote it. See `THIRD-PARTY-NOTICES.txt`.
