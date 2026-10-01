@@ -79,7 +79,7 @@ It fails immediately, naming the path, if that is not executable.
 The Node scripts they call run natively anywhere.
 ## Cloning
 
-This repo also uses **Git LFS** for art, audio and fonts — run `git lfs install`
+This repo uses **Git LFS** for art, audio and fonts — run `git lfs install`
 before cloning, or those files arrive as text pointers.
 
 ## What the game shows you
