@@ -79,17 +79,7 @@ It fails immediately, naming the path, if that is not executable.
 The Node scripts they call run natively anywhere.
 ## Cloning
 
-**The SDK is a private UPM package.** `Packages/manifest.json` points at
-
-```
-git@github.com:Minit-Games/minit-unity.git?path=/Packages/games.minit.unity
-```
-
-The docs give the HTTPS form; this uses **SSH** because the repo is private and
-HTTPS has no non-interactive credential path. You need an SSH key with access,
-or Unity cannot resolve the package and nothing will compile.
-
-This repo also uses **Git LFS** for art, audio and fonts — run `git lfs install`
+This repo uses **Git LFS** for art, audio and fonts — run `git lfs install`
 before cloning, or those files arrive as text pointers.
 
 ## What the game shows you
@@ -183,8 +173,10 @@ sprite from signed distance fields and `tools/gen-audio.mjs` synthesises the
 effects, both into `Assets/Resources/` where the game loads them by name.
 Replace either wholesale when you bring your own.
 
-The background music is the one third-party asset: a CC0 chiptune, converted by
-`tools/gen-music.mjs` from 2.0 MB of 44.1 kHz stereo to 0.35 MB of 16 kHz mono.
+There are two third-party assets. The Titan One font (SIL OFL 1.1) ships
+unmodified in `Assets/Resources/Fonts/`. The background music is a CC0
+chiptune, converted by `tools/gen-music.mjs` from 2.0 MB of 44.1 kHz stereo to
+0.35 MB of 16 kHz mono.
 Unity loops it natively via `AudioSource.loop`. That script also checks whether
 the loop point is genuinely seamless before "fixing" it; this track's is, so it
 is left exactly as the author wrote it. See `THIRD-PARTY-NOTICES.txt`.

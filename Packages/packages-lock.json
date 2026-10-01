@@ -281,11 +281,11 @@
       "url": "https://packages.unity.com"
     },
     "games.minit.unity": {
-      "version": "git@github.com:Minit-Games/minit-unity.git?path=/Packages/games.minit.unity",
+      "version": "https://github.com/Minit-Games/minit-unity.git?path=/Packages/games.minit.unity",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "9b6ce5da751473ee4a2b19271b94cbf6a46b7602"
+      "hash": "b23a7beb9692c0520b26ad269fb41e981adffc3c"
     },
     "com.unity.modules.accessibility": {
       "version": "1.0.0",
