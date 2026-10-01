@@ -79,16 +79,6 @@ It fails immediately, naming the path, if that is not executable.
 The Node scripts they call run natively anywhere.
 ## Cloning
 
-**The SDK is a private UPM package.** `Packages/manifest.json` points at
-
-```
-git@github.com:Minit-Games/minit-unity.git?path=/Packages/games.minit.unity
-```
-
-The docs give the HTTPS form; this uses **SSH** because the repo is private and
-HTTPS has no non-interactive credential path. You need an SSH key with access,
-or Unity cannot resolve the package and nothing will compile.
-
 This repo also uses **Git LFS** for art, audio and fonts — run `git lfs install`
 before cloning, or those files arrive as text pointers.
 

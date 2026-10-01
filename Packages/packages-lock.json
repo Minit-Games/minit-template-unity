@@ -281,7 +281,7 @@
       "url": "https://packages.unity.com"
     },
     "games.minit.unity": {
-      "version": "git@github.com:Minit-Games/minit-unity.git?path=/Packages/games.minit.unity",
+      "version": "https://github.com/Minit-Games/minit-unity.git?path=/Packages/games.minit.unity",
       "depth": 0,
       "source": "git",
       "dependencies": {},
