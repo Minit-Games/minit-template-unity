@@ -92,11 +92,25 @@ before cloning, or those files arrive as text pointers.
 | `BouncyBall.cs` → `Start()` | `Minit.GetUserData()` read back as the player's previous best. |
 | `Assets/WebGLTemplates/Minit/index.html` | The audio fixes. Read this before touching sound. |
 | `BouncyBall.cs` → `Layout()` | Everything measured from `Screen.width/height`, every frame it changes. |
+| `BouncyBall.cs` → `ReadMotionProfile()` | Device-adaptive effects: landing dust and screen shake scaled by `GetMotionQuality()`, `GetDeviceTier()` and `PrefersReducedMotion()`. |
 | `Assets/Editor/MinitTemplateSetup.cs` | Recreates the scene and applies the project settings, so the project can be rebuilt from source. |
 
 Note the API is **ahead of the published docs**: `ReportResult` takes a
 `userData` argument and `GetUserData()` exists (DROP-4077). The docs page still
 shows the older signature.
+
+## Device-adaptive effects
+
+> **Learn page:** [Device-adaptive effects](https://minit.studio/docs/device-adaptive-effects)
+
+Read once in `ReadMotionProfile()`, applied on every landing:
+
+- `Minit.GetMotionQuality()` `"reduced"` → no dust burst, only the single puff.
+- `Minit.GetDeviceTier()` → dust motes per landing: `low` 3, `medium`/`unknown` 6, `high` 10.
+  `unknown` is what a browser preview without host hints reports, so it gets the default.
+- `Minit.PrefersReducedMotion()` → skips the screen shake on hard landings.
+- In the Editor these always read `full` / `unknown` / `false`.
+- Test a WebGL build with URL overrides: `?motionQuality=reduced`, `?deviceTier=low|medium|high`, `?reducedMotion=1`.
 
 ## Read this before you touch audio
 

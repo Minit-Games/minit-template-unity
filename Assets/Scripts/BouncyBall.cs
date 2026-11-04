@@ -13,6 +13,8 @@ using MinitGames;
 ///
 /// WHAT TO COPY FROM HERE
 ///   * ReadConfig()          — config values, with defaults and clamping
+///   * ReadMotionProfile()   — GetMotionQuality / GetDeviceTier / PrefersReducedMotion
+///                             scale the landing dust and the screen shake
 ///   * Minit.LoadingDone()   — at the end of Start, once the scene is built
 ///   * Finish()              — ReportResult exactly once, with flavour text,
 ///                             persisted userData and a delay for the outro
@@ -33,6 +35,8 @@ public class BouncyBall : MonoBehaviour
     const float BounceDamp = 0.62f; // energy kept on each landing
     const float RestSpeed = 1.4f;   // below this the ball stops rather than jittering
     const int EndDelayMs = 900;     // how long the host waits before its result screen
+    const float HardLanding = 6f;   // units/s of impact that shakes the screen
+    const int MaxDust = 10;
 
     int _pointsPerTap = 10;
     bool _soundOn = true, _musicOn = true;
@@ -59,9 +63,17 @@ public class BouncyBall : MonoBehaviour
     AudioSource _tapSfx, _bounceSfx, _finishSfx, _music;
     float _puffAge = -1f;
 
+    RectTransform _world;
+    readonly Image[] _dust = new Image[MaxDust];
+    readonly Vector2[] _dustPos = new Vector2[MaxDust], _dustVel = new Vector2[MaxDust];
+    int _dustCount = 6;
+    bool _shakeOn = true;
+    float _dustAge = -1f, _shakeAge = -1f, _shakeAmp;
+
     void Start()
     {
         ReadConfig();
+        ReadMotionProfile();
 
         // The player's single persisted slot, written by ReportResult last run.
         string stored = Minit.GetUserData();
@@ -84,6 +96,20 @@ public class BouncyBall : MonoBehaviour
             ? Mathf.Clamp(p, 1, 100) : 10;
         _soundOn = Minit.GetConfigValue("sound", "true") != "false";
         _musicOn = Minit.GetConfigValue("music", "true") != "false";
+    }
+
+    void ReadMotionProfile()
+    {
+        // A browser preview with no host hints reports "unknown"; it gets the
+        // same budget as a mid-range phone rather than none.
+        if (Minit.GetMotionQuality() == "reduced") _dustCount = 0;
+        else switch (Minit.GetDeviceTier())
+        {
+            case "low": _dustCount = 3; break;
+            case "high": _dustCount = MaxDust; break;
+            default: _dustCount = 6; break;
+        }
+        _shakeOn = !Minit.PrefersReducedMotion();
     }
 
     // ------------------------------------------------------------------ view
@@ -170,16 +196,30 @@ public class BouncyBall : MonoBehaviour
         if (font == null) Debug.LogWarning("[BouncyBall] missing font Resources/Fonts/TitanOne-Regular");
 
         _sky = AddImage(_canvasRect, "Sky", "sky");
-        _ground = AddImage(_canvasRect, "Ground", "ground");
+
+        // The scene art the screen shake moves; the sky and the HUD stay put.
+        var worldGo = new GameObject("World", typeof(RectTransform));
+        worldGo.transform.SetParent(_canvasRect, false);
+        _world = worldGo.GetComponent<RectTransform>();
+        _world.anchorMin = Vector2.zero;
+        _world.anchorMax = Vector2.one;
+        _world.offsetMin = _world.offsetMax = Vector2.zero;
+
+        _ground = AddImage(_world, "Ground", "ground");
         for (int i = 0; i < _turf.Length; i++)
         {
-            _turf[i] = AddImage(_canvasRect, "Turf" + i, "turf");
+            _turf[i] = AddImage(_world, "Turf" + i, "turf");
             _turf[i].enabled = false;
         }
-        _shadow = AddImage(_canvasRect, "Shadow", "shadow");
-        _ball = AddImage(_canvasRect, "Ball", "ball");
-        _puff = AddImage(_canvasRect, "Puff", "puff");
+        _shadow = AddImage(_world, "Shadow", "shadow");
+        _ball = AddImage(_world, "Ball", "ball");
+        _puff = AddImage(_world, "Puff", "puff");
         _puff.enabled = false;
+        for (int i = 0; i < _dust.Length; i++)
+        {
+            _dust[i] = AddImage(_world, "Dust" + i, "puff");
+            _dust[i].enabled = false;
+        }
 
         _dim = AddImage(_canvasRect, "Dim", "square");
         _dim.color = new Color(0.04f, 0.09f, 0.13f, 0f);
@@ -371,6 +411,35 @@ public class BouncyBall : MonoBehaviour
                 _puff.color = new Color(1f, 1f, 1f, 0.75f * (1f - k));
             }
         }
+
+        if (_dustAge >= 0f)
+        {
+            _dustAge += dt;
+            float k = _dustAge / 0.5f;
+            for (int i = 0; i < _dustCount; i++)
+            {
+                _dust[i].enabled = k < 1f;
+                if (k >= 1f) continue;
+                _dustVel[i].y -= Gravity * 0.4f * _unit * dt;
+                _dustPos[i] += _dustVel[i] * dt;
+                _dustPos[i].y = Mathf.Max(_groundY, _dustPos[i].y);
+                float s = _ballR * 0.5f * (1f - 0.5f * k);
+                Place(_dust[i], _dustPos[i].x, _dustPos[i].y, s, s);
+                _dust[i].color = new Color(1f, 1f, 1f, 0.8f * (1f - k));
+            }
+            if (k >= 1f) _dustAge = -1f;
+        }
+
+        if (_shakeAge >= 0f)
+        {
+            _shakeAge += dt;
+            float k = _shakeAge / 0.25f;
+            // Only ever pushed down: the sky does not move, so lifting the
+            // ground would open a gap along the bottom edge.
+            float dip = k >= 1f ? 0f : _shakeAmp * Mathf.Abs(Mathf.Sin(k * Mathf.PI * 3f)) * (1f - k);
+            _world.anchoredPosition = new Vector2(0f, -dip);
+            if (k >= 1f) _shakeAge = -1f;
+        }
     }
 
     void Land(float impact)
@@ -379,6 +448,20 @@ public class BouncyBall : MonoBehaviour
         _squash = Mathf.Min(0.34f, 0.1f + impact * 0.016f);
         _puff.enabled = true;
         _puffAge = 0f;
+
+        for (int i = 0; i < _dustCount; i++)
+        {
+            float side = i % 2 == 0 ? -1f : 1f;
+            _dustPos[i] = new Vector2(_ballX + side * _ballR * 0.6f, _groundY + _ballR * 0.2f);
+            _dustVel[i] = new Vector2(side * Random.Range(2f, 5f), Random.Range(1f, 3.5f)) * _unit;
+        }
+        if (_dustCount > 0) _dustAge = 0f;
+
+        if (_shakeOn && impact > HardLanding)
+        {
+            _shakeAge = 0f;
+            _shakeAmp = _unit * Mathf.Min(0.35f, impact * 0.025f);
+        }
     }
 
     void HandleInput()
