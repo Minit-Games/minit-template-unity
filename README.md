@@ -105,10 +105,10 @@ shows the older signature.
 
 Read once in `ReadMotionProfile()`, applied on every landing:
 
-- `Minit.GetMotionQuality()` `"reduced"` → no dust burst, only the single puff.
+- `Minit.GetMotionQuality()` `"reduced"` or `Minit.PrefersReducedMotion()` → no dust burst, only the single puff.
 - `Minit.GetDeviceTier()` → dust motes per landing: `low` 3, `medium`/`unknown` 6, `high` 10.
   `unknown` is what a browser preview without host hints reports, so it gets the default.
-- `Minit.PrefersReducedMotion()` → skips the screen shake on hard landings.
+- Screen shake on hard landings only when motion quality is `"full"` and `PrefersReducedMotion()` is false.
 - In the Editor these always read `full` / `unknown` / `false`.
 - Test a WebGL build with URL overrides: `?motionQuality=reduced`, `?deviceTier=low|medium|high`, `?reducedMotion=1`.
 

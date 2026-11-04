@@ -66,7 +66,7 @@ public class BouncyBall : MonoBehaviour
     RectTransform _world;
     readonly Image[] _dust = new Image[MaxDust];
     readonly Vector2[] _dustPos = new Vector2[MaxDust], _dustVel = new Vector2[MaxDust];
-    int _dustCount = 6;
+    int _dustCount;
     bool _shakeOn = true;
     float _dustAge = -1f, _shakeAge = -1f, _shakeAmp;
 
@@ -102,14 +102,16 @@ public class BouncyBall : MonoBehaviour
     {
         // A browser preview with no host hints reports "unknown"; it gets the
         // same budget as a mid-range phone rather than none.
-        if (Minit.GetMotionQuality() == "reduced") _dustCount = 0;
+        bool fullMotion = Minit.GetMotionQuality() == "full";
+        bool reducedMotion = Minit.PrefersReducedMotion();
+        if (!fullMotion || reducedMotion) _dustCount = 0;
         else switch (Minit.GetDeviceTier())
         {
             case "low": _dustCount = 3; break;
             case "high": _dustCount = MaxDust; break;
             default: _dustCount = 6; break;
         }
-        _shakeOn = !Minit.PrefersReducedMotion();
+        _shakeOn = fullMotion && !reducedMotion;
     }
 
     // ------------------------------------------------------------------ view
