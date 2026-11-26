@@ -108,4 +108,4 @@ echo
 echo "wrote $ZIP ($(du -h "$ZIP" | cut -f1))"
 unzip -l "$ZIP" | tail -n +4 | head -12
 echo
-echo "Upload $ZIP at https://console.minit.games"
+echo "Upload $ZIP at https://minit.studio"
